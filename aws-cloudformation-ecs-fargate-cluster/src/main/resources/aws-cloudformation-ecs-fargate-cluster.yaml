@@ -1,5 +1,20 @@
 AWSTemplateFormatVersion: 2010-09-09
 Description: A cloudformation template that creates an ECS Fargate cluster, running a docker container (assuming docker container is in an ECR image repository).
+
+Parameters:
+  NamePrefix:
+    Type: String
+    Description: Prefix for naming resources and name tags
+    Default: cf-ecs-fargate
+    AllowedValues:
+      - cf-ecs-fargate
+  SourceTagValue:
+    Type: String
+    Description: Source tag value
+    Default: aws-clousdformation-ecs-fargate-cluster
+    AllowedValues:
+      - aws-clousdformation-ecs-fargate-cluster
+
 Resources:
   # VPC and contained subnets
   VPC:
@@ -10,8 +25,10 @@ Resources:
       EnableDnsSupport: true
       InstanceTenancy: default
       Tags:
+        - Key: Name
+          Value: !Join [ '-', [ !Ref NamePrefix, vpc ] ]
         - Key: source
-          Value: aws-clousdformation-ecs-fargate-cluster
+          Value: !Ref SourceTagValue
   PublicSubnetA:
     Type: AWS::EC2::Subnet
     Properties:
@@ -22,8 +39,10 @@ Resources:
       CidrBlock: 10.0.0.0/24
       VpcId: !Ref VPC
       Tags:
+        - Key: Name
+          Value: !Join [ '-', [ !Ref NamePrefix, public-subnet-a ] ]
         - Key: source
-          Value: aws-clousdformation-ecs-fargate-cluster
+          Value: !Ref SourceTagValue
   PublicSubnetB:
     Type: AWS::EC2::Subnet
     Properties:
@@ -34,5 +53,47 @@ Resources:
       CidrBlock: 10.0.1.0/24
       VpcId: !Ref VPC
       Tags:
+        - Key: Name
+          Value: !Join [ '-', [ !Ref NamePrefix, public-subnet-b ] ]
         - Key: source
-          Value: aws-clousdformation-ecs-fargate-cluster
+          Value: !Ref SourceTagValue
+
+  # Route table and internet gateways
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Join [ '-', [ !Ref NamePrefix, internet-gateway ] ]
+        - Key: source
+          Value: !Ref SourceTagValue
+  InternetGatewayAttachement:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId: !Ref InternetGateway
+      VpcId: !Ref VPC
+  RouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Join [ '-', [ !Ref NamePrefix, route-table ] ]
+        - Key: source
+          Value: !Ref SourceTagValue
+  RouteInternet:
+    Type: AWS::EC2::Route
+    Properties:
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+      RouteTableId: !Ref RouteTable
+  PublicSubnetARouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref RouteTable
+      SubnetId: !Ref PublicSubnetA
+  PublicSubnetBRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref RouteTable
+      SubnetId: !Ref PublicSubnetB
