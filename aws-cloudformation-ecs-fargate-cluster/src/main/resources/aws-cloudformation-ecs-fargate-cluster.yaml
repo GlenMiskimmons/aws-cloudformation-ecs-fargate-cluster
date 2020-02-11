@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: 2010-09-09
-Description: A cloudformation template that creates an ECS Fargate cluster, running a docker container (assuming docker container is in an ECR image repository).
+Description: A cloudformation template that creates an ECS Fargate cluster, running a docker container (you must push the docker container yourself).
 
 Parameters:
   NamePrefix:
@@ -8,15 +8,8 @@ Parameters:
     Default: cf-ecs-fargate
     AllowedValues:
       - cf-ecs-fargate
-  SourceTagValue:
-    Type: String
-    Description: Source tag value
-    Default: aws-clousdformation-ecs-fargate-cluster
-    AllowedValues:
-      - aws-clousdformation-ecs-fargate-cluster
-
 Resources:
-  # VPC and contained subnets
+  # VPC and contained Subnets
   VPC:
     Type: AWS::EC2::VPC
     Properties:
@@ -28,7 +21,7 @@ Resources:
         - Key: Name
           Value: !Join [ '-', [ !Ref NamePrefix, vpc ] ]
         - Key: source
-          Value: !Ref SourceTagValue
+          Value: !Ref AWS::StackName
   PublicSubnetA:
     Type: AWS::EC2::Subnet
     Properties:
@@ -42,7 +35,7 @@ Resources:
         - Key: Name
           Value: !Join [ '-', [ !Ref NamePrefix, public-subnet-a ] ]
         - Key: source
-          Value: !Ref SourceTagValue
+          Value: !Ref AWS::StackName
   PublicSubnetB:
     Type: AWS::EC2::Subnet
     Properties:
@@ -56,9 +49,9 @@ Resources:
         - Key: Name
           Value: !Join [ '-', [ !Ref NamePrefix, public-subnet-b ] ]
         - Key: source
-          Value: !Ref SourceTagValue
+          Value: !Ref AWS::StackName
 
-  # Route table and internet gateways
+  # Route Table and Internet Gateways
   InternetGateway:
     Type: AWS::EC2::InternetGateway
     Properties:
@@ -66,7 +59,7 @@ Resources:
         - Key: Name
           Value: !Join [ '-', [ !Ref NamePrefix, internet-gateway ] ]
         - Key: source
-          Value: !Ref SourceTagValue
+          Value: !Ref AWS::StackName
   InternetGatewayAttachement:
     Type: AWS::EC2::VPCGatewayAttachment
     Properties:
@@ -80,7 +73,7 @@ Resources:
         - Key: Name
           Value: !Join [ '-', [ !Ref NamePrefix, route-table ] ]
         - Key: source
-          Value: !Ref SourceTagValue
+          Value: !Ref AWS::StackName
   RouteInternet:
     Type: AWS::EC2::Route
     Properties:
@@ -97,3 +90,66 @@ Resources:
     Properties:
       RouteTableId: !Ref RouteTable
       SubnetId: !Ref PublicSubnetB
+
+  # ECR Repository
+  EcrRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: !Join [ '-', [ !Ref NamePrefix, ecr-repository ] ]
+      Tags:
+        - Key: Name
+          Value: !Join [ '-', [ !Ref NamePrefix, ecr-repository ] ]
+        - Key: source
+          Value: !Ref AWS::StackName
+
+  # ECS Cluster, Services and Tasks
+  EcsCluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: !Join [ '-', [ !Ref NamePrefix, cluster ] ]
+      ClusterSettings:
+        - Name: containerInsights
+          Value: enabled
+      Tags:
+        - Key: Name
+          Value: !Join [ '-', [ !Ref NamePrefix, cluster ] ]
+        - Key: source
+          Value: !Ref AWS::StackName
+
+  # IAM Roles
+  EcsTaskExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      Description: Role used for ecs task execution
+      RoleName: !Join [ '-', [ !Ref NamePrefix, role-task-execution ] ]
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: [ ecs-tasks.amazonaws.com ]
+            Action: [ 'sts:AssumeRole' ]
+      Path: /
+      Policies:
+        - PolicyName: !Join [ '-', [ !Ref NamePrefix, role-task-execution-policy ] ]
+          PolicyDocument:
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'ecs:CreateCluster'
+                  - 'ecs:DeregisterContainerInstance'
+                  - 'ecs:DiscoverPollEndpoint'
+                  - 'ecs:Poll'
+                  - 'ecs:RegisterContainerInstance'
+                  - 'ecs:StartTelemetrySession'
+                  - 'ecs:Submit*'
+                  - 'logs:CreateLogStream'
+                  - 'logs:PutLogEvents'
+                  - 'ecr:GetAuthorizationToken'
+                  - 'ecr:BatchGetImage'
+                  - 'ecr:GetDownloadUrlForLayer'
+                Resource: '*'
+      Tags:
+        - Key: Name
+          Value: !Join [ '-', [ !Ref NamePrefix, role-task-execution ] ]
+        - Key: source
+          Value: !Ref AWS::StackName
