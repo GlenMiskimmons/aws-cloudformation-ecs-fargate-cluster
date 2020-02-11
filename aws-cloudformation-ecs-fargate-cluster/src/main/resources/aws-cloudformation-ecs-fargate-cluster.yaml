@@ -1,7 +1,38 @@
 AWSTemplateFormatVersion: 2010-09-09
-Description:
+Description: A cloudformation template that creates an ECS Fargate cluster, running a docker container (assuming docker container is in an ECR image repository).
 Resources:
-  DummyServer:
-    Type: AWS::EC2::Instance
+  # VPC and contained subnets
+  VPC:
+    Type: AWS::EC2::VPC
     Properties:
-      ImageId:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      InstanceTenancy: default
+      Tags:
+        - Key: source
+          Value: aws-clousdformation-ecs-fargate-cluster
+  PublicSubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: !Join
+        - ''
+        - - !Ref AWS::Region
+          - a
+      CidrBlock: 10.0.0.0/24
+      VpcId: !Ref VPC
+      Tags:
+        - Key: source
+          Value: aws-clousdformation-ecs-fargate-cluster
+  PublicSubnetB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: !Join
+        - ''
+        - - !Ref AWS::Region
+          - b
+      CidrBlock: 10.0.1.0/24
+      VpcId: !Ref VPC
+      Tags:
+        - Key: source
+          Value: aws-clousdformation-ecs-fargate-cluster
