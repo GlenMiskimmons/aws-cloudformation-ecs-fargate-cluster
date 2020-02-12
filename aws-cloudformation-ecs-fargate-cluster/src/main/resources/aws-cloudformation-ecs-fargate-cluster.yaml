@@ -123,6 +123,31 @@ Resources:
           Value: !Join [ '-', [ !Ref NamePrefix, cluster ] ]
         - Key: source
           Value: !Ref AWS::StackName
+  EcsService:
+    Type: AWS::ECS::Service
+    Properties:
+      Cluster: !Ref EcsCluster
+      DeploymentConfiguration:
+        MaximumPercent: 200
+        MinimumHealthyPercent: 100
+      DesiredCount: 1
+      LaunchType: FARGATE
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: ENABLED
+          SecurityGroups:
+            - !Ref EcsContainerSecurityGroup
+          Subnets:
+            - !Ref PublicSubnetA
+            - !Ref PublicSubnetB
+      SchedulingStrategy: REPLICA
+      ServiceName: !Join [ '-', [ !Ref NamePrefix, service] ]
+      TaskDefinition: !Ref EcsTaskDefinition
+      Tags:
+        - Key: Name
+          Value: !Join [ '-', [ !Ref NamePrefix, service] ]
+        - Key: source
+          Value: !Ref AWS::StackName
   EcsTaskDefinition:
     Type: AWS::ECS::TaskDefinition
     DependsOn: EcsTaskLogGroup
@@ -192,6 +217,24 @@ Resources:
                   - 'ecr:BatchGetImage'
                   - 'ecr:GetDownloadUrlForLayer'
                 Resource: '*'
+      Tags:
+        - Key: Name
+          Value: !Join [ '-', [ !Ref NamePrefix, role-task-execution ] ]
+        - Key: source
+          Value: !Ref AWS::StackName
+
+  # Security Groups
+  EcsContainerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: !Join [ '-', [ !Ref 'AWS::StackName', container-security-group ] ]
+      GroupName: !Join [ '-', [ !Ref NamePrefix, role-task-execution ] ]
+      SecurityGroupIngress:
+        - CidrIp: 0.0.0.0/0
+          IpProtocol: tcp
+          FromPort: !Ref ContainerPort
+          ToPort: !Ref ContainerPort
+      VpcId: !Ref VPC
       Tags:
         - Key: Name
           Value: !Join [ '-', [ !Ref NamePrefix, role-task-execution ] ]
