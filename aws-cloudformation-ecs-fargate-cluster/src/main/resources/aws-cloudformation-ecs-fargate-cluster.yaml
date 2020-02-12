@@ -2,12 +2,20 @@ AWSTemplateFormatVersion: 2010-09-09
 Description: A cloudformation template that creates an ECS Fargate cluster, running a docker container (you must push the docker container yourself).
 
 Parameters:
+  ContainerPort:
+    Type: Number
+    Description: The port the application is running on within the docker container
+    MinValue: 1
+  EcrRepositoryUri:
+    Type: String
+    Description: URI of image to run within ECS Task definition
+    MinLength: 1
   NamePrefix:
     Type: String
     Description: Prefix for naming resources and name tags
     Default: cf-ecs-fargate
-    AllowedValues:
-      - cf-ecs-fargate
+    MinLength: 1
+
 Resources:
   # VPC and contained Subnets
   VPC:
@@ -115,6 +123,42 @@ Resources:
           Value: !Join [ '-', [ !Ref NamePrefix, cluster ] ]
         - Key: source
           Value: !Ref AWS::StackName
+  EcsTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    DependsOn: EcsTaskLogGroup
+    Properties:
+      ContainerDefinitions:
+        - Cpu: 256
+          Image: !Ref EcrRepositoryUri
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-region: !Ref AWS::Region
+              awslogs-group: !Ref EcsTaskLogGroup
+              awslogs-stream-prefix: !Ref NamePrefix
+          Memory: 512
+          MemoryReservation: 512
+          Name: !Join [ '-', [ !Ref NamePrefix, container ] ]
+          PortMappings:
+            - ContainerPort: !Ref ContainerPort
+              Protocol: tcp
+      Cpu: 256
+      ExecutionRoleArn: !Ref EcsTaskExecutionRole
+      Family: !Join [ '-', [ !Ref NamePrefix, task ] ]
+      Memory: 512
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE
+      Tags:
+        - Key: Name
+          Value: !Join [ '-', [ !Ref NamePrefix, task ] ]
+        - Key: source
+          Value: !Ref AWS::StackName
+  EcsTaskLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Join [ '-', [ !Ref NamePrefix, log-group ] ]
+      RetentionInDays: 7
 
   # IAM Roles
   EcsTaskExecutionRole:
