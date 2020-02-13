@@ -10,6 +10,16 @@ Parameters:
     Type: String
     Description: URI of image to run within ECS Task definition
     MinLength: 1
+  HealthCheckPath:
+    Type: String
+    Description: Specify a path for the loadbalancer to determine if a node is healthy
+    MinLength: 1
+    Default: /
+  LoadBalancerPort:
+    Type: Number
+    Description: The port the load balancer will forward requests from
+    MinValue: 1
+    Default: 80
   NamePrefix:
     Type: String
     Description: Prefix for naming resources and name tags
@@ -131,7 +141,12 @@ Resources:
         MaximumPercent: 200
         MinimumHealthyPercent: 100
       DesiredCount: 1
+      HealthCheckGracePeriodSeconds: 60
       LaunchType: FARGATE
+      LoadBalancers:
+        - ContainerName: !Join [ '-', [ !Ref NamePrefix, container ] ]
+          ContainerPort: !Ref ContainerPort
+          TargetGroupArn: !Ref LoadBalancerTargetGroup
       NetworkConfiguration:
         AwsvpcConfiguration:
           AssignPublicIp: ENABLED
@@ -179,11 +194,67 @@ Resources:
           Value: !Join [ '-', [ !Ref NamePrefix, task ] ]
         - Key: source
           Value: !Ref AWS::StackName
+
+  # logs
   EcsTaskLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
       LogGroupName: !Join [ '-', [ !Ref NamePrefix, log-group ] ]
       RetentionInDays: 7
+
+  # Load Balancer
+  LoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      IpAddressType: ipv4
+      Name: !Join [ '-', [ !Ref NamePrefix, load-balancer ] ]
+      Scheme: internet-facing
+      SecurityGroups:
+        - !Ref LoadBalancerSecurityGroup
+      Subnets:
+        - !Ref PublicSubnetA
+        - !Ref PublicSubnetB
+      Type: application
+      Tags:
+        - Key: Name
+          Value: !Join [ '-', [ !Ref NamePrefix, load-balancer ] ]
+        - Key: source
+          Value: !Ref AWS::StackName
+  LoadBalancerTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      HealthCheckEnabled: true
+      HealthCheckIntervalSeconds: 30
+      HealthCheckPath: !Ref HealthCheckPath
+      HealthCheckPort: 8080
+      HealthCheckProtocol: HTTP
+      HealthCheckTimeoutSeconds: 10
+      HealthyThresholdCount: 2
+      Matcher:
+        HttpCode: 200 # TODO: Health check will fail as it cannot hit the endpoint due to authorisation required in app.
+      Name: !Join [ '-', [ !Ref NamePrefix, target-group ] ]
+      Port: !Ref ContainerPort
+      Protocol: HTTP
+      VpcId: !Ref VPC
+      TargetGroupAttributes:
+        - Key: deregistration_delay.timeout_seconds
+          Value: 60
+      TargetType: ip
+      UnhealthyThresholdCount: 2
+      Tags:
+        - Key: Name
+          Value: !Join [ '-', [ !Ref NamePrefix, load-balancer-target-group ] ]
+        - Key: source
+          Value: !Ref AWS::StackName
+  LoadBalancerHTTP:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - TargetGroupArn: !Ref LoadBalancerTargetGroup
+          Type: forward
+      LoadBalancerArn: !Ref LoadBalancer
+      Port: !Ref LoadBalancerPort
+      Protocol: HTTP
 
   # IAM Roles
   EcsTaskExecutionRole:
@@ -228,15 +299,26 @@ Resources:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupDescription: !Join [ '-', [ !Ref 'AWS::StackName', container-security-group ] ]
-      GroupName: !Join [ '-', [ !Ref NamePrefix, role-task-execution ] ]
+      GroupName: !Join [ '-', [ !Ref NamePrefix, container-security-group ] ]
       SecurityGroupIngress:
-        - CidrIp: 0.0.0.0/0
-          IpProtocol: tcp
+        - IpProtocol: tcp
           FromPort: !Ref ContainerPort
           ToPort: !Ref ContainerPort
+          SourceSecurityGroupId: !Ref LoadBalancerSecurityGroup
       VpcId: !Ref VPC
       Tags:
         - Key: Name
-          Value: !Join [ '-', [ !Ref NamePrefix, role-task-execution ] ]
+          Value: !Join [ '-', [ !Ref NamePrefix, container-security-group ] ]
         - Key: source
           Value: !Ref AWS::StackName
+  LoadBalancerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: !Join [ '-', [ !Ref 'AWS::StackName', load-balancer-security-group ] ]
+      GroupName: !Join [ '-', [ !Ref NamePrefix, load-balancer-security-group ] ]
+      SecurityGroupIngress:
+        - CidrIp: 0.0.0.0/0
+          IpProtocol: tcp
+          FromPort: !Ref LoadBalancerPort
+          ToPort: !Ref LoadBalancerPort
+      VpcId: !Ref VPC
