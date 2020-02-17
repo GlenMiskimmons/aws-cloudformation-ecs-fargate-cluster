@@ -15,6 +15,11 @@ Parameters:
     Description: Specify a path for the loadbalancer to determine if a node is healthy
     MinLength: 1
     Default: /
+  HealthCheckHttpCode:
+    Type: Number
+    Description: The return code of the healthcheck endpoint.
+    MinValue: 1
+    Default: 200
   LoadBalancerPort:
     Type: Number
     Description: The port the load balancer will forward requests from
@@ -226,12 +231,12 @@ Resources:
       HealthCheckEnabled: true
       HealthCheckIntervalSeconds: 30
       HealthCheckPath: !Ref HealthCheckPath
-      HealthCheckPort: 8080
+      HealthCheckPort: !Ref ContainerPort
       HealthCheckProtocol: HTTP
       HealthCheckTimeoutSeconds: 10
       HealthyThresholdCount: 2
       Matcher:
-        HttpCode: 200 # TODO: Health check will fail as it cannot hit the endpoint due to authorisation required in app.
+        HttpCode: !Ref HealthCheckHttpCode
       Name: !Join [ '-', [ !Ref NamePrefix, target-group ] ]
       Port: !Ref ContainerPort
       Protocol: HTTP
